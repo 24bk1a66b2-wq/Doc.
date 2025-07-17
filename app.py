@@ -1,27 +1,51 @@
 import streamlit as st
 import pandas as pd
-import joblib
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report, accuracy_score
+from imblearn.over_sampling import SMOTE
 
-# Load model
-model = joblib.load('rf_model.pkl')
+st.title("💳 Credit Card Fraud Detection")
+st.write("Using Machine Learning (Random Forest)")
 
-# App UI
-st.title("Credit Card Fraud Detection")
-st.write("Upload transaction data to detect fraud")
+# Sample or real dataset
+@st.cache_data
+def load_data():
+    df = pd.read_csv("https://raw.githubusercontent.com/opengeekslab/opengeekslab.github.io/main/datasets/creditcard.csv")
+    return df
 
-uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
+df = load_data()
 
-if uploaded_file is not None:
-    data = pd.read_csv(uploaded_file)
-    if data.shape[1] >= 4:
-        st.write("Sample data:")
-        st.write(data.head())
+# Preprocessing
+X = df.drop(['Class', 'Time'], axis=1)
+y = df['Class']
+sm = SMOTE(random_state=42)
+X_res, y_res = sm.fit_resample(X, y)
+X_train, X_test, y_train, y_test = train_test_split(X_res, y_res, test_size=0.3, random_state=42)
 
-        # Predict
-        prediction = model.predict(data)
-        data['Prediction'] = prediction
-        st.write("Prediction results:")
-        st.write(data)
-        st.success(f"Fraudulent transactions detected: {sum(prediction)}")
+# Train the model
+model = RandomForestClassifier()
+model.fit(X_train, y_train)
+
+# Predict
+y_pred = model.predict(X_test)
+
+# Output
+st.write("### Model Performance")
+st.write("Accuracy:", accuracy_score(y_test, y_pred))
+st.text(classification_report(y_test, y_pred))
+
+# Try your own input
+st.write("### Try a New Transaction")
+
+input_data = []
+for col in X.columns:
+    val = st.number_input(f"{col}", value=float(X[col].mean()))
+    input_data.append(val)
+
+if st.button("Predict"):
+    prediction = model.predict([input_data])
+    if prediction[0] == 1:
+        st.error("⚠️ Fraudulent Transaction Detected")
     else:
-        st.error("CSV must contain at least 4 features")
+        st.success("✅ Legitimate Transaction")
